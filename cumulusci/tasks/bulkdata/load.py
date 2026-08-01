@@ -28,6 +28,7 @@ from cumulusci.tasks.bulkdata.query_transformers import (
     AddPersonAccountsToQuery,
     AddRecordTypesToQuery,
     DynamicLookupQueryExtender,
+    register_sqlite_functions,
 )
 from cumulusci.tasks.bulkdata.step import (
     DEFAULT_BULK_BATCH_SIZE,
@@ -126,6 +127,11 @@ class LoadData(SqlAlchemyMixin, BaseSalesforceApiTask):
         self.options["enable_rollback"] = process_bool_arg(
             self.options.get("enable_rollback", False)
         )
+        if self.options["enable_rollback"] and self.options["ignore_row_errors"]:
+            self.logger.warning(
+                "enable_rollback=True has no effect on row-level errors when "
+                "ignore_row_errors=True, because row errors are suppressed before rollback can trigger."
+            )
         self._id_generators = {}
         self._old_format = False
         self.ID_TABLE_NAME = ID_TABLE_NAME
@@ -766,6 +772,9 @@ class LoadData(SqlAlchemyMixin, BaseSalesforceApiTask):
         with self._database_url() as database_url:
             parent_engine = create_engine(database_url)
             with parent_engine.connect() as connection:
+                # Register custom SQLite functions for smart lookup resolution
+                register_sqlite_functions(connection)
+
                 # initialize the DB session
                 self.session = Session(connection)
 
